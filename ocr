@@ -3,27 +3,35 @@ import cv2
 import pyttsx3
 import threading
 import time
+import numpy as np
 
-# Initialize text-to-speech engine
+# Initialize TTS engine
 engine = pyttsx3.init()
-engine.setProperty('rate', 150)  # Set speech rate
+engine.setProperty('rate', 150)  # Adjust speech rate for clarity
 
 # Open webcam
 webcam = cv2.VideoCapture(0)
+webcam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # Increase resolution
+webcam.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-print("Starting optimized live OCR with audio output. Press 'q' to quit.")
+print("Live OCR with Audio Output. Press 'q' to quit.")
 
 # Variable to store the last detected text
 last_text = ""
-frame_skip = 5  # Process every 5th frame
-frame_count = 0
 
+def preprocess_frame(frame):
+    """Preprocess the frame for better OCR accuracy."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    # Remove noise and smooth the image
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Adaptive thresholding for better text extraction
+    processed = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    return processed
 
 def speak_text(text):
     """Threaded function to speak text using pyttsx3."""
     engine.say(text)
     engine.runAndWait()
-
 
 while True:
     try:
@@ -33,20 +41,12 @@ while True:
             print("Failed to capture image from webcam.")
             break
 
-        # Resize frame to speed up OCR
-        resized_frame = cv2.resize(frame, (640, 480))
+        # Preprocess the frame
+        processed_frame = preprocess_frame(frame)
 
-        # Skip frames to reduce processing load
-        frame_count += 1
-        if frame_count % frame_skip != 0:
-            continue
-
-        # Convert frame to grayscale for better OCR performance
-        gray_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-
-        # Perform OCR on the current frame
-        config = r'--oem 3 --psm 6'  # Optimize Tesseract configuration
-        text = pytesseract.image_to_string(gray_frame, config=config).strip()
+        # Perform OCR on the processed frame
+        config = r'--oem 3 --psm 4'  # Optimize for paragraph detection
+        text = pytesseract.image_to_string(processed_frame, config=config).strip()
 
         # If new text is detected, process it
         if text and text != last_text:
@@ -58,8 +58,9 @@ while True:
             threading.Thread(target=speak_text, args=(text,)).start()
 
         # Display the live webcam feed with detected text overlay
-        cv2.putText(resized_frame, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-        cv2.imshow("Optimized Live OCR Feed", resized_frame)
+        overlay_frame = frame.copy()
+        cv2.putText(overlay_frame, "Press 'q' to quit", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        cv2.imshow("Live OCR Feed", overlay_frame)
 
         # Quit the program when 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
