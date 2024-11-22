@@ -21,6 +21,11 @@ with open(classFile, "rt") as f:
 configPath = "/home/pi/Desktop/Object_Detection_Files/ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt"
 weightsPath = "/home/pi/Desktop/Object_Detection_Files/frozen_inference_graph.pb"
 
+# Debug: Check if files exist
+assert os.path.exists(configPath), "Config file not found!"
+assert os.path.exists(weightsPath), "Weights file not found!"
+assert os.path.exists(classFile), "Class file not found!"
+
 net = cv2.dnn_DetectionModel(weightsPath, configPath)
 net.setInputSize(320, 320)
 net.setInputScale(1.0 / 127.5)
@@ -30,7 +35,7 @@ net.setInputSwapRB(True)
 # Function to Detect Objects and Provide Audio Output
 def object_detection(img):
     global last_detected_object
-    classIds, confs, bbox = net.detect(img, confThreshold=0.45, nmsThreshold=0.2)
+    classIds, confs, bbox = net.detect(img, confThreshold=0.3, nmsThreshold=0.2)  # Lowered threshold
     if len(classIds) != 0:
         for classId, confidence, box in zip(classIds.flatten(), confs.flatten(), bbox):
             className = classNames[classId - 1]
@@ -45,6 +50,7 @@ def object_detection(img):
                 # Speak the detected object
                 if last_detected_object != className:  # Avoid repeating the same object
                     last_detected_object = className
+                    print(f"Detected Object: {className} ({confidence*100:.2f}%)")
                     engine.say(f"I see a {className}")
                     engine.runAndWait()
 
