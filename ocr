@@ -1,33 +1,52 @@
 import pytesseract
 import cv2
 import pyttsx3
+import threading
 import time
 
 # Initialize text-to-speech engine
 engine = pyttsx3.init()
-engine.setProperty('rate', 125)  # Set speech rate
+engine.setProperty('rate', 150)  # Set speech rate
 
 # Open webcam
 webcam = cv2.VideoCapture(0)
 
-print("Starting live OCR with audio output. Press 'q' to quit.")
+print("Starting optimized live OCR with audio output. Press 'q' to quit.")
 
 # Variable to store the last detected text
 last_text = ""
+frame_skip = 5  # Process every 5th frame
+frame_count = 0
+
+
+def speak_text(text):
+    """Threaded function to speak text using pyttsx3."""
+    engine.say(text)
+    engine.runAndWait()
+
 
 while True:
     try:
-        # Capture a frame from the webcam
+        # Capture frame from webcam
         ret, frame = webcam.read()
         if not ret:
             print("Failed to capture image from webcam.")
             break
 
-        # Convert the frame to grayscale for better OCR performance
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Resize frame to speed up OCR
+        resized_frame = cv2.resize(frame, (640, 480))
+
+        # Skip frames to reduce processing load
+        frame_count += 1
+        if frame_count % frame_skip != 0:
+            continue
+
+        # Convert frame to grayscale for better OCR performance
+        gray_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
 
         # Perform OCR on the current frame
-        text = pytesseract.image_to_string(gray_frame).strip()
+        config = r'--oem 3 --psm 6'  # Optimize Tesseract configuration
+        text = pytesseract.image_to_string(gray_frame, config=config).strip()
 
         # If new text is detected, process it
         if text and text != last_text:
@@ -35,23 +54,17 @@ while True:
             print(text)
             last_text = text  # Update the last detected text
             
-            # Speak the detected text
-            engine.say("Here is what I read:")
-            engine.say(text)
-            engine.runAndWait()
-        
+            # Speak the detected text in a separate thread
+            threading.Thread(target=speak_text, args=(text,)).start()
+
         # Display the live webcam feed with detected text overlay
-        overlay_frame = frame.copy()
-        cv2.putText(overlay_frame, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-        cv2.imshow("Live OCR Feed", overlay_frame)
+        cv2.putText(resized_frame, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.imshow("Optimized Live OCR Feed", resized_frame)
 
         # Quit the program when 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Exiting the program.")
             break
-
-        # Optional: Add a small delay to prevent continuous reprocessing
-        time.sleep(0.5)
 
     except KeyboardInterrupt:
         print("\nProgram interrupted by user.")
