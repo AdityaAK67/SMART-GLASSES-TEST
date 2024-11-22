@@ -1,50 +1,60 @@
 import pytesseract
 import cv2
 import pyttsx3
+import time
 
-# Initialize TTS engine
+# Initialize text-to-speech engine
 engine = pyttsx3.init()
 engine.setProperty('rate', 125)  # Set speech rate
 
 # Open webcam
 webcam = cv2.VideoCapture(0)
 
-print("Press 'z' to capture and process the image or 'q' to quit.")
+print("Starting live OCR with audio output. Press 'q' to quit.")
+
+# Variable to store the last detected text
+last_text = ""
 
 while True:
     try:
-        # Capture frame from webcam
+        # Capture a frame from the webcam
         ret, frame = webcam.read()
         if not ret:
-            print("Failed to capture image.")
+            print("Failed to capture image from webcam.")
             break
-        
-        # Display the live video feed
-        cv2.imshow("Live OCR Feed", frame)
-        
-        # Check for key press
-        key = cv2.waitKey(1)
-        
-        if key == ord('z'):  # Capture image and process it
-            # Convert frame to grayscale (optional, improves OCR)
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            
-            # Perform OCR on the captured frame
-            text = pytesseract.image_to_string(gray_frame)
+
+        # Convert the frame to grayscale for better OCR performance
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Perform OCR on the current frame
+        text = pytesseract.image_to_string(gray_frame).strip()
+
+        # If new text is detected, process it
+        if text and text != last_text:
             print("Text Detected:")
             print(text)
+            last_text = text  # Update the last detected text
             
             # Speak the detected text
-            engine.say("Here is the text I read.")
+            engine.say("Here is what I read:")
             engine.say(text)
             engine.runAndWait()
-            
-        elif key == ord('q'):  # Quit the program
+        
+        # Display the live webcam feed with detected text overlay
+        overlay_frame = frame.copy()
+        cv2.putText(overlay_frame, text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.imshow("Live OCR Feed", overlay_frame)
+
+        # Quit the program when 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Exiting the program.")
             break
 
+        # Optional: Add a small delay to prevent continuous reprocessing
+        time.sleep(0.5)
+
     except KeyboardInterrupt:
-        print("Interrupted by user.")
+        print("\nProgram interrupted by user.")
         break
 
 # Release resources
