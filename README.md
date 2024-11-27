@@ -1,4 +1,3 @@
-
 import pytesseract
 import cv2
 import pyttsx3
@@ -18,22 +17,19 @@ print("Press 'q' to exit the program.")
 
 def preprocess_image(image):
     """
-    Preprocess the image to improve OCR accuracy.
+    Preprocess the image to improve OCR accuracy:
     - Convert to grayscale
-    - Apply thresholding
-    - Remove noise using morphological operations
+    - Apply adaptive thresholding
+    - Remove noise
+    - Optionally resize the image for better OCR
     """
-    # Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Apply thresholding (binarization)
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    # Optionally remove noise with morphological operations
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-
-    return cleaned
+    binary = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+    )
+    cleaned = cv2.medianBlur(binary, 3)  # Reduce noise
+    resized = cv2.resize(cleaned, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_LINEAR)
+    return resized
 
 while True:
     # Capture frame-by-frame from the webcam
@@ -65,8 +61,13 @@ while True:
                 # Preprocess the image for OCR
                 preprocessed_image = preprocess_image(image)
 
+                # Debug: Display the preprocessed image
+                cv2.imshow("Preprocessed Image", preprocessed_image)
+                cv2.waitKey(0)
+
                 # Use pytesseract to extract text
-                detected_text = pytesseract.image_to_string(preprocessed_image, lang='eng')
+                custom_config = r'--oem 3 --psm 6'
+                detected_text = pytesseract.image_to_string(preprocessed_image, config=custom_config)
 
                 if detected_text.strip():  # Check if text was detected
                     print("Text Detected:")
